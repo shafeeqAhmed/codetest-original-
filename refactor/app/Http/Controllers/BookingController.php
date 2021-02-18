@@ -9,436 +9,286 @@ use Illuminate\Http\Request;
 use DTApi\Repository\BookingRepository;
 
 /**
-* Class BookingController
-* @package DTApi\Http\Controllers
-*/
+ * Class BookingController
+ * @package DTApi\Http\Controllers
+ */
 class BookingController extends Controller
 {
-    //remove repetition of the code
-    public $status;
-    public $message;
-    public $data;
+
     /**
-    * @var BookingRepository
-    */
+     * @var BookingRepository
+     */
     protected $repository;
-    
+
     /**
-    * BookingController constructor.
-    * @param BookingRepository $bookingRepository
-    */
+     * BookingController constructor.
+     * @param BookingRepository $bookingRepository
+     */
     public function __construct(BookingRepository $bookingRepository)
     {
         $this->repository = $bookingRepository;
-        //remove repetition of the code
-        $this->data=[];
-        $this->status=true;
-        $this->message='Something is going wrong please try again!';
     }
-    
+
     /**
-    * @param Request $request
-    * @return mixed
-    */
+     * @param Request $request
+     * @return mixed
+     */
     public function index(Request $request)
     {
-            //Single responsibility principle
-            //A class and a method should have only one responsibility.
+        if($user_id = $request->get('user_id')) {
 
-        try{
-            //if user id exist then get single user job
-            //if user with adminstrator role want single record he can get it
-            //if user id does not set and user with adminstrator role he can fetch all users
+            $response = $this->repository->getUsersJobs($user_id);
 
-            $this->data['response']=($this->isAdministrtorRole($request) &&  !$request->has('user_id')) ?  $this->getAllJob($request) : $this->getJob($request->user_id);
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
-
-        }catch(\Exception $e){
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
+        }
+        elseif($request->__authenticatedUser->user_type == env('ADMIN_ROLE_ID') || $request->__authenticatedUser->user_type == env('SUPERADMIN_ROLE_ID'))
+        {
+            $response = $this->repository->getAll($request);
         }
 
-        
-    }
-    public function standerResponse(){
-      return  ['Status'=>$this->status,'Message'=>$this->message,'Data'=>$this->data];
-    }
-    public function isAdministrtorRole(){
-      return  $this->isAdmin() || $this->isSuperAdmin();
-    }
-    public function getJob($user_id){
-       return  $this->repository->getUsersJobs($user_id);
-    }
-   public function getAllJob($request){
-       return  $this->repository->getAll($request);
+        return response($response);
     }
 
     /**
-    * @param $id
-    * @return mixed
-    */
+     * @param $id
+     * @return mixed
+     */
     public function show($id)
-    {  
-        // use findOrFail instead of find function
-        try
-        {  
-            $this->data['response']=$this->repository->with('translatorJobRel.user')->findOrFail($id);
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-    }
-    
-    /**
-    * @param Request $request
-    * @return mixed
-    */
-    public function store(StoreBookingRequest  $request)
     {
-        //make a seperate validationRequest for booking and validate
-        // correct syntax to fetch authenticated user
+        $job = $this->repository->with('translatorJobRel.user')->find($id);
 
-        $validated = $request->validated();
-        
-        try {
-            $this->data['response'] = $this->repository->store(Auth::user(), $request->validated());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());  
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
+        return response($job);
     }
-    
+
     /**
-    * @param $id
-    * @param Request $request
-    * @return mixed
-    */
-    public function update($id, StoreBookingRequest $request)
+     * @param Request $request
+     * @return mixed
+     */
+    public function store(Request $request)
     {
-        // validatie form with request class
+        $data = $request->all();
 
-        $validated = $request->validated();
-        
-        try {
-            $this->data['response'] = $this->repository->updateJob($id, array_except($request->validated(), ['_token', 'submit']), Auth::user());  
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse()); 
-        } 
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-    
+        $response = $this->repository->store($request->__authenticatedUser, $data);
+
+        return response($response);
+
     }
-    
+
     /**
-    * @param Request $request
-    * @return mixed
-    */
+     * @param $id
+     * @param Request $request
+     * @return mixed
+     */
+    public function update($id, Request $request)
+    {
+        $data = $request->all();
+        $cuser = $request->__authenticatedUser;
+        $response = $this->repository->updateJob($id, array_except($data, ['_token', 'submit']), $cuser);
+
+        return response($response);
+    }
+
+    /**
+     * @param Request $request
+     * @return mixed
+     */
     public function immediateJobEmail(Request $request)
     {
-             
-        try
-        {
-            $adminSenderEmail = config('app.adminemail');
-            $data = $request->all();
-            $this->data['response'] = $this->repository->storeJobEmail($data);
-            
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse()); 
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
-        
+        $adminSenderEmail = config('app.adminemail');
+        $data = $request->all();
+
+        $response = $this->repository->storeJobEmail($data);
+
+        return response($response);
     }
-    
+
     /**
-    * @param Request $request
-    * @return mixed
-    */
+     * @param Request $request
+     * @return mixed
+     */
     public function getHistory(Request $request)
     {
-        // use shorthand notation to get request data
-        // if authenticated user id is equal to user id in request then call jobHistory method
+        if($user_id = $request->get('user_id')) {
 
-        try{
-            $this->data['response'] = Auth::user()->id == $request->user_id ? $this->jobsHistory($request) : null; 
-            return response()->json($this->standerResponse()); 
+            $response = $this->repository->getUsersJobsHistory($user_id, $request);
+            return response($response);
         }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
+
+        return null;
     }
 
-    public function jobsHistory($request){
-        $this->message='Response fetched Successfully!';
-        return $this->repository->getUsersJobsHistory(Auth::user()->id, $request);
-    }
-    
     /**
-    * @param Request $request
-    * @return mixed
-    */
+     * @param Request $request
+     * @return mixed
+     */
     public function acceptJob(Request $request)
     {
-        // pass data directly in arguments. no need to create variables.
+        $data = $request->all();
+        $user = $request->__authenticatedUser;
 
-        try{
-            $this->data['response'] = $this->repository->acceptJob($request->all(), Auth::user());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse()); 
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
+        $response = $this->repository->acceptJob($data, $user);
+
+        return response($response);
     }
-    
+
     public function acceptJobWithId(Request $request)
     {
-        // pass data directly in arguments. no need to create variables.
+        $data = $request->get('job_id');
+        $user = $request->__authenticatedUser;
 
-        try{
-            $this->data['response'] = $this->repository->acceptJobWithId($request->job_id, Auth::user());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
+        $response = $this->repository->acceptJobWithId($data, $user);
+
+        return response($response);
     }
-    
+
     /**
-    * @param Request $request
-    * @return mixed
-    */
+     * @param Request $request
+     * @return mixed
+     */
     public function cancelJob(Request $request)
     {
-        // pass data directly in arguments. no need to create variables.
+        $data = $request->all();
+        $user = $request->__authenticatedUser;
 
-        try{
-            $this->data['response'] = $this->repository->cancelJobAjax($request->all(), Auth::user());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
+        $response = $this->repository->cancelJobAjax($data, $user);
+
+        return response($response);
     }
-    
+
     /**
-    * @param Request $request
-    * @return mixed
-    */
+     * @param Request $request
+     * @return mixed
+     */
     public function endJob(Request $request)
     {
-        // pass data directly in arguments. no need to create variables.
+        $data = $request->all();
 
-        try{
-            $this->data['response'] = $this->repository->endJob($request->all());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
+        $response = $this->repository->endJob($data);
+
+        return response($response);
+
     }
-    
+
     public function customerNotCall(Request $request)
     {
-        // pass data directly in arguments. no need to create variables.
+        $data = $request->all();
 
-        try{
-            $this->data['response'] = $this->repository->customerNotCall($request->all());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
+        $response = $this->repository->customerNotCall($data);
 
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
-        
+        return response($response);
+
     }
-    
+
     /**
-    * @param Request $request
-    * @return mixed
-    */
+     * @param Request $request
+     * @return mixed
+     */
     public function getPotentialJobs(Request $request)
     {
         $data = $request->all();
-        try{
-            $this->data['response'] = $this->repository->getPotentialJobs(Auth::user());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
+        $user = $request->__authenticatedUser;
+
+        $response = $this->repository->getPotentialJobs($user);
+
+        return response($response);
     }
-    
-    public function distanceFeed(StoreDistancefeedRequest $request)
+
+    public function distanceFeed(Request $request)
     {
-        $validated = $request->validated();
-
-        $gtDistance = false;
-        $getJob = false;
-
-
         $data = $request->all();
-        
-        if ($request->has('distance') && notEmpty($data['distance'])) {
-            $gtDistance = true;
+
+        if (isset($data['distance']) && $data['distance'] != "") {
+            $distance = $data['distance'];
+        } else {
+            $distance = "";
         }
-        else if ($request->has('time') && notEmpty($data['time'])) {
-            $gtDistance = true;
+        if (isset($data['time']) && $data['time'] != "") {
+            $time = $data['time'];
+        } else {
+            $time = "";
         }
-        else if ($request->has('jobid') && notEmpty($data['jobid'])) {
+        if (isset($data['jobid']) && $data['jobid'] != "") {
             $jobid = $data['jobid'];
         }
-        
-        else if ($request->has('session_time') && notEmpty($data['session_time'])) {
-            $getJob = true;
+
+        if (isset($data['session_time']) && $data['session_time'] != "") {
+            $session = $data['session_time'];
+        } else {
+            $session = "";
         }
-        
-        else if ($data['flagged'] == 'true') {
+
+        if ($data['flagged'] == 'true') {
             if($data['admincomment'] == '') return "Please, add comment";
-            $getJob = true;
+            $flagged = 'yes';
+        } else {
+            $flagged = 'no';
         }
         
-        else if ($data['manually_handled'] == 'true') {
-            $getJob = true;
-        }
-        
-        else if ($data['by_admin'] == 'true') {
-            $getJob = true;
-        }
-        
-        else if ($request->has('admincomment') && notEmpty($data['admincomment'])) {
-            $getJob = true;
+        if ($data['manually_handled'] == 'true') {
+            $manually_handled = 'yes';
+        } else {
+            $manually_handled = 'no';
         }
 
+        if ($data['by_admin'] == 'true') {
+            $by_admin = 'yes';
+        } else {
+            $by_admin = 'no';
+        }
 
-        if ($gtDistance) {
-            
-            $affectedRows = Distance::where('job_id', '=', $jobid)->update(array('distance' => $request->distance, 'time' => $request->time));
+        if (isset($data['admincomment']) && $data['admincomment'] != "") {
+            $admincomment = $data['admincomment'];
+        } else {
+            $admincomment = "";
         }
-        
-        if ($getJob) {
-            
-            $affectedRows1 = Job::where('id', '=', $jobid)->update(array('admin_comments' => $request->admincomment, 'flagged' => $request->flagged, 'session_time' => $request->session, 'manually_handled' => $request->manually_handled, 'by_admin' => $request->by_admin));
-            
+        if ($time || $distance) {
+
+            $affectedRows = Distance::where('job_id', '=', $jobid)->update(array('distance' => $distance, 'time' => $time));
         }
-        
-        $this->message='Response fetched Successfully!';
-        return response()->json($this->standerResponse());
+
+        if ($admincomment || $session || $flagged || $manually_handled || $by_admin) {
+
+            $affectedRows1 = Job::where('id', '=', $jobid)->update(array('admin_comments' => $admincomment, 'flagged' => $flagged, 'session_time' => $session, 'manually_handled' => $manually_handled, 'by_admin' => $by_admin));
+
+        }
+
+        return response('Record updated!');
     }
-    
+
     public function reopen(Request $request)
     {
-        
-        try{
-            $this->data['response'] = $this->repository->reopen($request->all());
-            $this->message='Response fetched Successfully!';
-            return response()->json($this->standerResponse());
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-        
-       
+        $data = $request->all();
+        $response = $this->repository->reopen($data);
+
+        return response($response);
     }
-    
+
     public function resendNotifications(Request $request)
     {
-        //pass jobid directly from request method
+        $data = $request->all();
+        $job = $this->repository->find($data['jobid']);
+        $job_data = $this->repository->jobToData($job);
+        $this->repository->sendNotificationTranslator($job, $job_data, '*');
 
-        $job = $this->repository->find($request->jobid);
-        try{
-            $job_data = $this->repository->jobToData($job);
-            $this->repository->sendNotificationTranslator($job, $job_data, '*');
-            $this->message='Push sent';
-            return response()->json($this->standerResponse());
-
-        }
-        catch(\Exception $e)
-        {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
-        }
-
-        
+        return response(['success' => 'Push sent']);
     }
-    
+
     /**
-    * Sends SMS to Translator
-    * @param Request $request
-    * @return \Illuminate\Contracts\Routing\ResponseFactory|\Symfony\Component\HttpFoundation\Response
-    */
+     * Sends SMS to Translator
+     * @param Request $request
+     * @return \Illuminate\Contracts\Routing\ResponseFactory|\Symfony\Component\HttpFoundation\Response
+     */
     public function resendSMSNotifications(Request $request)
     {
-    
-        $job = $this->repository->find($request->jobid);
+        $data = $request->all();
+        $job = $this->repository->find($data['jobid']);
         $job_data = $this->repository->jobToData($job);
-        
+
         try {
             $this->repository->sendSMSNotificationToTranslator($job);
-            $this->message='SMS sent';
-            return response()->json($this->standerResponse());
-        } catch (\\Exception $e) {
-            $this->message=$e->getMessage();
-            return response()->json($this->standerResponse());
+            return response(['success' => 'SMS sent']);
+        } catch (\Exception $e) {
+            return response(['success' => $e->getMessage()]);
         }
     }
-    
 
-    public function isAdmin(){
-        
-        return Auth::user()->user_type == env('ADMIN_ROLE_ID') ? true : false;
-
-    }
-
-    public function isSuperAdmin(){
-
-        return Auth::user()->user_type == env('SUPERADMIN_ROLE_ID') ? true : false;
-
-    }
-    
-    
 }

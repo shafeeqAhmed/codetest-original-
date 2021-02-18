@@ -57,7 +57,7 @@ class BookingRepository extends BaseRepository
      */
     public function getUsersJobs($user_id)
     {
-        $cuser = User::findOrFail($user_id);
+        $cuser = User::find($user_id);
         $usertype = '';
         $emergencyJobs = array();
         $noramlJobs = array();
@@ -97,7 +97,7 @@ class BookingRepository extends BaseRepository
         } else {
             $pagenum = "1";
         }
-        $cuser = User::findOrFail($user_id);
+        $cuser = User::find($user_id);
         $usertype = '';
         $emergencyJobs = array();
         $noramlJobs = array();
@@ -127,7 +127,6 @@ class BookingRepository extends BaseRepository
      */
     public function store($user, $data)
     {
-        //change some else to elseif for better performance
 
         $immediatetime = 5;
         $consumer_type = $user->userMeta->consumer_type;
@@ -140,26 +139,26 @@ class BookingRepository extends BaseRepository
                 $response['field_name'] = "from_language_id";
                 return $response;
             }
-            elseif ($data['immediate'] == 'no') {
+            if ($data['immediate'] == 'no') {
                 if (isset($data['due_date']) && $data['due_date'] == '') {
                     $response['status'] = 'fail';
                     $response['message'] = "Du måste fylla in alla fält";
                     $response['field_name'] = "due_date";
                     return $response;
                 }
-                elseif (isset($data['due_time']) && $data['due_time'] == '') {
+                if (isset($data['due_time']) && $data['due_time'] == '') {
                     $response['status'] = 'fail';
                     $response['message'] = "Du måste fylla in alla fält";
                     $response['field_name'] = "due_time";
                     return $response;
                 }
-                elseif (!isset($data['customer_phone_type']) && !isset($data['customer_physical_type'])) {
+                if (!isset($data['customer_phone_type']) && !isset($data['customer_physical_type'])) {
                     $response['status'] = 'fail';
                     $response['message'] = "Du måste göra ett val här";
                     $response['field_name'] = "customer_phone_type";
                     return $response;
                 }
-                elseif (isset($data['duration']) && $data['duration'] == '') {
+                if (isset($data['duration']) && $data['duration'] == '') {
                     $response['status'] = 'fail';
                     $response['message'] = "Du måste fylla in alla fält";
                     $response['field_name'] = "duration";
@@ -287,8 +286,8 @@ class BookingRepository extends BaseRepository
     public function storeJobEmail($data)
     {
         $user_type = $data['user_type'];
-        $job = Job::findOrFail($data['user_email_job_id']); // remove @ 
-        $job->user_email = $data['user_email'];
+        $job = Job::findOrFail(@$data['user_email_job_id']);
+        $job->user_email = @$data['user_email'];
         $job->reference = isset($data['reference']) ? $data['reference'] : '';
         $user = $job->user()->get()->first();
         if (isset($data['address'])) {
@@ -1597,7 +1596,7 @@ class BookingRepository extends BaseRepository
     {
         $completeddate = date('Y-m-d H:i:s');
         $jobid = $post_data["job_id"];
-        $job_detail = Job::with('translatorJobRel')->findOrFail($jobid);
+        $job_detail = Job::with('translatorJobRel')->find($jobid);
 
         if($job_detail->status != 'started')
             return ['status' => 'success'];
@@ -1684,7 +1683,7 @@ class BookingRepository extends BaseRepository
     public function getAll(Request $request, $limit = null)
     {
         $requestdata = $request->all();
-        $cuser = Auth::user();
+        $cuser = $request->__authenticatedUser;
         $consumer_type = $cuser->consumer_type;
 
         if ($cuser && $cuser->user_type == env('SUPERADMIN_ROLE_ID')) {
